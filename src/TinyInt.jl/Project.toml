@@ -1,0 +1,4 @@
+name = "TinyInt"
+uuid = "5c00428b-f02f-4c11-baf3-6665e230c9c9"
+authors = ["Matt Covalt <mcovalt@mailbox.org>"]
+version = "0.1.0"

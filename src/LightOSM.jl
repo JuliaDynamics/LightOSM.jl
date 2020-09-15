@@ -12,7 +12,9 @@ using NearestNeighbors: KDTree, knn
 using HTTP
 using JSON
 using LightXML
-using TinyInt: TinyIntVec, pack, unpack, unpack!
+
+include("TinyInt.jl/src/TinyInt.jl")
+using .TinyInt: TinyIntVec, pack, unpack, unpack!
 
 export GeoLocation,
        OSMGraph,
