@@ -27,6 +27,9 @@ Creates an `OSMGraph` object from download OpenStreetMap network data, use with
     possible for graphs with large amount of nodes due to memory limits.
 - `largest_connected_component::Bool=true`: Set true to keep only the largest connected 
     components in the network.
+- `filter_network_type::Bool=true`: Set true to filter out nodes and edges that do not 
+    match the `network_type` filter. Useful if the network data was downloaded with custom
+    Overpass filters and/or not generated with LightOSM.
 
 # Return
 - `OSMGraph`: Container for storing OpenStreetMap node-, way-, relation- and graph-related 
@@ -37,9 +40,10 @@ function graph_from_object(osm_data_object::Union{XMLDocument,Dict};
                            weight_type::Symbol=:time,
                            graph_type::Symbol=:static,
                            precompute_dijkstra_states::Bool=false,
-                           largest_connected_component::Bool=true
+                           largest_connected_component::Bool=true,
+                           filter_network_type::Bool=true
                            )::OSMGraph
-    g = init_graph_from_object(osm_data_object, network_type)
+    g = init_graph_from_object(osm_data_object, network_type, filter_network_type=filter_network_type)
     add_node_and_edge_mappings!(g)
     add_weights!(g, weight_type)
     add_graph!(g, graph_type)
@@ -61,13 +65,13 @@ function graph_from_object(osm_data_object::Union{XMLDocument,Dict};
 end
 
 """
-    graph_from_object(file_path::String;
-                      network_type::Symbol=:drive,
-                      weight_type::Symbol=:time,
-                      graph_type::Symbol=:static,
-                      precompute_dijkstra_states::Bool=false,
-                      largest_connected_component::Bool=true
-                      )::OSMGraph
+    graph_from_file(file_path::String;
+                    network_type::Symbol=:drive,
+                    weight_type::Symbol=:time,
+                    graph_type::Symbol=:static,
+                    precompute_dijkstra_states::Bool=false,
+                    largest_connected_component::Bool=true
+                    )::OSMGraph
 
 Creates an `OSMGraph` object from a downloaded OpenStreetMap network data file, the extention must be either `.json`, `.osm` or `.xml`.
 
@@ -78,6 +82,9 @@ Creates an `OSMGraph` object from a downloaded OpenStreetMap network data file, 
 - `graph_type::Symbol=:static`: Type of `Graphs.AbstractGraph`, pick from `:static` (StaticDiGraph), `:light` (DiGraph), `:simple_weighted` (SimpleWeightedDiGraph), `:meta` (MetaDiGraph).
 - `precompute_dijkstra_states::Bool=false`: Set true to precompute dijkstra parent states for every source node in the graph, *NOTE* this may take a while and may not be possible for graphs with large amount of nodes due to memory limits.
 - `largest_connected_component::Bool=true`: Set true to keep only the largest connected components in the network.
+- `filter_network_type::Bool=true`: Set true to filter out nodes and edges that do not 
+    match the `network_type` filter. Useful if the network data was downloaded with custom
+    Overpass filters and/or not generated with LightOSM.
 
 # Return
 - `OSMGraph`: Container for storing OpenStreetMap node, way, relation and graph related obejcts.
@@ -87,7 +94,8 @@ function graph_from_file(file_path::String;
                          weight_type::Symbol=:time,
                          graph_type::Symbol=:static,
                          precompute_dijkstra_states::Bool=false,
-                         largest_connected_component::Bool=true
+                         largest_connected_component::Bool=true,
+                         filter_network_type::Bool=true
                          )::OSMGraph
 
     !isfile(file_path) && throw(ArgumentError("File $file_path does not exist"))
@@ -98,7 +106,8 @@ function graph_from_file(file_path::String;
                              weight_type=weight_type,
                              graph_type=graph_type,
                              precompute_dijkstra_states=precompute_dijkstra_states,
-                             largest_connected_component=largest_connected_component)
+                             largest_connected_component=largest_connected_component,
+                             filter_network_type=filter_network_type)
 end
 
 """
@@ -126,6 +135,9 @@ Downloads OpenStreetMap network data and creates an `OSMGraph` object.
 - `graph_type::Symbol=:static`: Type of `Graphs.AbstractGraph`, pick from `:static` (StaticDiGraph), `:light` (DiGraph), `:simple_weighted` (SimpleWeightedDiGraph), `:meta` (MetaDiGraph).
 - `precompute_dijkstra_states::Bool=false`: Set true to precompute dijkstra parent states for every source node in the graph, *NOTE* this may take a while and may not be possible for graphs with large amount of nodes due to memory limits.
 - `largest_connected_component::Bool=true`: Set true to keep only the largest connected components in the network.
+- `filter_network_type::Bool=true`: Set true to filter out nodes and edges that do not 
+    match the `network_type` filter after download. You may want to use this with 
+    `download_method=:custom_filters`.
 
 # Required Kwargs for each Download Method
 
@@ -167,6 +179,7 @@ function graph_from_download(download_method::Symbol;
                              graph_type::Symbol=:static,
                              precompute_dijkstra_states::Bool=false,
                              largest_connected_component::Bool=true,
+                             filter_network_type::Bool=true,
                              download_kwargs...
                              )::OSMGraph
     obj = download_osm_network(download_method,
@@ -180,16 +193,17 @@ function graph_from_download(download_method::Symbol;
                              weight_type=weight_type,
                              graph_type=graph_type,
                              precompute_dijkstra_states=precompute_dijkstra_states,
-                             largest_connected_component=largest_connected_component)
+                             largest_connected_component=largest_connected_component,
+                             filter_network_type=filter_network_type)
 end
 
 
 """
-    add_node_and_edge_mappings!(g::OSMGraph{U,T,W}) where {U <: Integer,T <: Integer,W <: Real}
+    add_node_and_edge_mappings!(g::OSMGraph{U,T,W}) where {U <: DEFAULT_OSM_INDEX_TYPE,T <: DEFAULT_OSM_ID_TYPE,W <: Real}
 
 Adds mappings between nodes, edges and ways to `OSMGraph`.
 """
-function add_node_and_edge_mappings!(g::OSMGraph{U,T,W}) where {U <: Integer,T <: Integer,W <: Real}
+function add_node_and_edge_mappings!(g::OSMGraph{U,T,W}) where {U <: DEFAULT_OSM_INDEX_TYPE,T <: DEFAULT_OSM_ID_TYPE,W <: Real}
     for (way_id, way) in g.ways
         @inbounds for (i, node_id) in enumerate(way.nodes)
             if haskey(g.node_to_way, node_id)
@@ -252,11 +266,11 @@ function add_node_tags!(g::OSMGraph)
 end
 
 """
-    adjacent_node(g::OSMGraph, node::T, way::T)::Union{T,Vector{<:T}} where T <: Integer
+    adjacent_node(g::OSMGraph, node::T, way::T)::Union{T,Vector{<:T}} where T <: DEFAULT_OSM_ID_TYPE
 
 Finds the adjacent node id on a given way.
 """
-function adjacent_node(g::OSMGraph, node::T, way::T)::Union{T,Vector{<:T}} where T <: Integer
+function adjacent_node(g::OSMGraph, node::T, way::T)::Union{T,Vector{<:T}} where T <: DEFAULT_OSM_ID_TYPE
     way_nodes = g.ways[way].nodes
     if node == way_nodes[1]
         return way_nodes[2]
@@ -279,14 +293,14 @@ function adjacent_node(g::OSMGraph, node::T, way::T)::Union{T,Vector{<:T}} where
 end
 
 """
-    add_indexed_restrictions!(g::OSMGraph{U,T,W}) where {U <: Integer,T <: Integer,W <: Real}
+    add_indexed_restrictions!(g::OSMGraph{U,T,W}) where {U <: DEFAULT_OSM_INDEX_TYPE, T <: DEFAULT_OSM_ID_TYPE, W <: Real}
 
 Adds restrictions linked lists to `OSMGraph`.
 
 # Example
 `[from_way_node_index, ...via_way_node_indices..., to_way_node_index]`
 """
-function add_indexed_restrictions!(g::OSMGraph{U,T,W}) where {U <: Integer,T <: Integer,W <: Real}
+function add_indexed_restrictions!(g::OSMGraph{U,T,W}) where {U <: DEFAULT_OSM_INDEX_TYPE,T <: DEFAULT_OSM_ID_TYPE,W <: Real}
     g.indexed_restrictions = DefaultDict{U,Vector{MutableLinkedList{U}}}(Vector{MutableLinkedList{U}})
 
     for (id, r) in g.restrictions
@@ -307,7 +321,7 @@ function add_indexed_restrictions!(g::OSMGraph{U,T,W}) where {U <: Integer,T <: 
             from_node = adjacent_node(g, r.via_node, r.from_way)::T
             for to_way in restricted_to_ways
                 to_node_temp = adjacent_node(g, r.via_node, to_way)
-                to_node = isa(to_node_temp, Integer) ? [to_node_temp] : to_node_temp
+                to_node = isa(to_node_temp, DEFAULT_OSM_ID_TYPE) ? [to_node_temp] : to_node_temp
 
                 for tn in to_node
                     # only_straight_on restrictions may have multiple to_nodes
@@ -385,19 +399,19 @@ function add_weights!(g::OSMGraph, weight_type::Symbol=:distance)
 end
 
 """
-    add_graph!(g::OSMGraph, graph_type::Symbol=:static)
+    add_graph!(g::OSMGraph{U, T, W}, graph_type::Symbol=:static) where {U <: DEFAULT_OSM_INDEX_TYPE, T <: DEFAULT_OSM_ID_TYPE, W <: Real}
 
 Adds a Graphs.AbstractGraph object to `OSMGraph`.
 """
-function add_graph!(g::OSMGraph{U, T, W}, graph_type::Symbol=:static) where {U <: Integer, T <: Integer, W <: Real}
+function add_graph!(g::OSMGraph{U, T, W}, graph_type::Symbol=:static) where {U <: DEFAULT_OSM_INDEX_TYPE, T <: DEFAULT_OSM_ID_TYPE, W <: Real}
     if graph_type == :light
-        g.graph = DiGraph{T}(g.weights)
+        g.graph = DiGraph{U}(g.weights)
     elseif graph_type == :static
         g.graph = StaticDiGraph{U,U}(StaticDiGraph(DiGraph(g.weights)))
     elseif graph_type == :simple_weighted
         g.graph = SimpleWeightedDiGraph{U,W}(g.weights)
     elseif graph_type == :meta
-        g.graph = MetaDiGraph(DiGraph{T}(g.weights))
+        g.graph = MetaDiGraph(DiGraph{U}(g.weights))
         for (o, d, w) in zip(findnz(copy(transpose(g.weights)))...)
             set_prop!(g.graph, o, d, :weight, w)
         end
@@ -442,7 +456,7 @@ function trim_to_largest_connected_component!(g::OSMGraph{U, T, W}, graph, weigh
 end
 
 """
-    add_dijkstra_states!(g::OSMGraph{U,T,W}) where {U <: Integer,T <: Integer,W <: Real}
+    add_dijkstra_states!(g::OSMGraph{U,T,W}) where {U <: DEFAULT_OSM_INDEX_TYPE,T <: DEFAULT_OSM_ID_TYPE,W <: Real}
 
 Adds precomputed dijkstra states for every source node in `OSMGraph`. Precomputing all dijkstra 
 states is a O(V² + ElogV) operation, where E is the number of edges and V is the number of vertices, 
@@ -451,9 +465,9 @@ may not be possible for larger graphs. Not recommended for graphs with greater t
 Note: Not using `cost_adjustment`, i.e. not consdering restrictions in dijkstra computation, 
 consider adding in the future.
 """
-function add_dijkstra_states!(g::OSMGraph{U,T,W}) where {U <: Integer,T <: Integer,W <: Real}
+function add_dijkstra_states!(g::OSMGraph{U,T,W}) where {U <: DEFAULT_OSM_INDEX_TYPE,T <: DEFAULT_OSM_ID_TYPE,W <: Real}
     @warn "Precomputing all dijkstra states is a O(V² + ElogV) operation, may not be possible for larger graphs."
-    g.dijkstra_states = Vector{Vector{U}}(undef, n)
+    g.dijkstra_states = Vector{Vector{U}}(undef, nv(g.graph))
     set_dijkstra_state!(g, collect(vertices(g.graph)))
 end
 
@@ -466,7 +480,7 @@ Returns a 3-by-n matrix where each column is the `xyz` coordinates of a node. Co
 correspond to the `g.graph` vertex indices.
 """
 function get_cartesian_locations(g::OSMGraph)
-    node_locations = [index_to_node(g, index).location for index in 1:nv(g.graph)]
+    node_locations = [index_to_node(g, index).location for index in DEFAULT_OSM_INDEX_TYPE(1):DEFAULT_OSM_INDEX_TYPE(nv(g.graph))]
     return to_cartesian(node_locations)
 end
 

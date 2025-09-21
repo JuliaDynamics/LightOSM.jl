@@ -122,7 +122,7 @@ is_restriction(tags::AbstractDict)::Bool = get(tags, "type", "") == "restriction
 """
 Determine if a restriction is valid and has usable data.
 """
-function is_valid_restriction(members::AbstractArray, ways::AbstractDict{T,Way{T}})::Bool where T <: Integer
+function is_valid_restriction(members::AbstractArray, ways::AbstractDict{T,Way{T}})::Bool where T <: DEFAULT_OSM_ID_TYPE
     role_counts = DefaultDict(0)
     role_type_counts = DefaultDict(0)
     ways_set = Set{Int}()
@@ -197,18 +197,22 @@ end
 """
 Parse OpenStreetMap data into `Node`, `Way` and `Restriction` objects.
 """
-function parse_osm_network_dict(osm_network_dict::AbstractDict, network_type::Symbol=:drive)::OSMGraph
+function parse_osm_network_dict(osm_network_dict::AbstractDict, 
+                                network_type::Symbol=:drive;
+                                filter_network_type::Bool=true
+                                )::OSMGraph
+    
     U = DEFAULT_OSM_INDEX_TYPE
-    T = DEFAULT_OSM_ID_TYPE
+    T = get_id_type(osm_network_dict)
     W = DEFAULT_OSM_EDGE_WEIGHT_TYPE
     L = DEFAULT_OSM_LANES_TYPE
 
     ways = Dict{T,Way{T}}()
-    highway_nodes = Set{Int}([])
+    highway_nodes = Set{T}([])
     for way in osm_network_dict["way"]
         if haskey(way, "tags") && haskey(way, "nodes")
             tags = way["tags"]
-            if is_highway(tags) && matches_network_type(tags, network_type)
+            if is_highway(tags) && (!filter_network_type || matches_network_type(tags, network_type))
                 tags["maxspeed"] = maxspeed(tags)
                 tags["lanes"] = lanes(tags)
                 tags["oneway"] = is_oneway(tags)
@@ -217,13 +221,13 @@ function parse_osm_network_dict(osm_network_dict::AbstractDict, network_type::Sy
                 union!(highway_nodes, nds)
                 id = way["id"]
                 ways[id] = Way(id, nds, tags)
-            elseif is_railway(tags) && matches_network_type(tags, network_type)
+            elseif is_railway(tags) && (!filter_network_type || matches_network_type(tags, network_type))
                 tags["rail_type"] = get(tags, "railway", "unknown")
                 tags["electrified"] = get(tags, "electrified", "unknown")
                 tags["gauge"] = get(tags, "gauge", nothing)
                 tags["usage"] = get(tags, "usage",  "unknown")
                 tags["name"] = get(tags, "name", "unknown")
-                tags["lanes"] = L(get(tags, "tracks", 1))
+                tags["lanes"] = lanes(tags)
                 tags["maxspeed"] = maxspeed(tags)
                 tags["oneway"] = is_oneway(tags)
                 tags["reverseway"] = is_reverseway(tags)
@@ -246,8 +250,9 @@ function parse_osm_network_dict(osm_network_dict::AbstractDict, network_type::Sy
             )
         end
     end
-    
+
     restrictions = Dict{T,Restriction{T}}()
+    restriction_fields = fieldnames(Restriction)
     if haskey(osm_network_dict, "relation")
         for relation in osm_network_dict["relation"]
             if haskey(relation, "tags") && haskey(relation, "members")
@@ -258,6 +263,9 @@ function parse_osm_network_dict(osm_network_dict::AbstractDict, network_type::Sy
                     restriction_kwargs = DefaultDict(Vector)
                     for member in members
                         key = "$(member["role"])_$(member["type"])"
+                        if !(Symbol(key) in restriction_fields)
+                            continue
+                        end
                         if key == "via_way"
                             push!(restriction_kwargs[Symbol(key)], member["ref"])
                         else
@@ -334,15 +342,51 @@ end
 """
 Initialises the OSMGraph object from OpenStreetMap data downloaded in `:xml` or `:osm` format.
 """
-function init_graph_from_object(osm_xml_object::XMLDocument, network_type::Symbol=:drive)::OSMGraph
+function init_graph_from_object(osm_xml_object::XMLDocument, 
+                                network_type::Symbol=:drive;
+                                filter_network_type::Bool=true
+                                )::OSMGraph
     dict_to_parse = osm_dict_from_xml(osm_xml_object)
-    return parse_osm_network_dict(dict_to_parse, network_type)
+    return parse_osm_network_dict(
+        dict_to_parse, 
+        network_type; 
+        filter_network_type=filter_network_type
+    )
 end
 
 """
 Initialises the OSMGraph object from OpenStreetMap data downloaded in `:json` format.
 """
-function init_graph_from_object(osm_json_object::AbstractDict, network_type::Symbol=:drive)::OSMGraph
+function init_graph_from_object(osm_json_object::AbstractDict, 
+                                network_type::Symbol=:drive;
+                                filter_network_type::Bool=true
+                                )::OSMGraph
     dict_to_parse = osm_dict_from_json(osm_json_object)
-    return parse_osm_network_dict(dict_to_parse, network_type)
+    return parse_osm_network_dict(
+        dict_to_parse, 
+        network_type; 
+        filter_network_type=filter_network_type
+    )
+end
+
+
+"""
+    get_id_type(osm_network_dict::AbstractDict)::Type
+
+Finds the node id type of an osm dict.
+"""
+function get_id_type(osm_network_dict::AbstractDict)::Type
+    if isempty(osm_network_dict["node"])
+        return Int64
+    end
+    
+    first_id = osm_network_dict["node"][1]["id"]
+
+    if first_id isa Integer
+        return Int64
+    elseif first_id isa String
+        return String
+    else
+        throw(ErrorException("OSM ID type not supported: $(typeof(first_id))"))
+    end
 end
