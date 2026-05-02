@@ -13,8 +13,8 @@ graphs = [
         @test sg.ways == g.ways
         @test sg.restrictions == g.restrictions
         @test sg.weight_type == g.weight_type
-        @test isdefined(sg.dijkstra_states, 1) == isdefined(g.dijkstra_states, 1)
-        if isdefined(g.dijkstra_states, 1)
+        @test isassigned(sg.dijkstra_states, 1) == isassigned(g.dijkstra_states, 1)
+        if isassigned(g.dijkstra_states, 1)
             @test sg.dijkstra_states == g.dijkstra_states
         end
         @test isdefined(sg.kdtree, 1) == isdefined(g.kdtree, 1)
