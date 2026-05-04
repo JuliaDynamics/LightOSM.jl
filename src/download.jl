@@ -432,7 +432,7 @@ function download_osm_network(download_method::Symbol;
                               download_format::Symbol=:json,
                               save_to_file_location::Union{String,Nothing}=nothing,
                               download_kwargs...
-                              )::Union{XMLDocument,Dict{String,Any}}
+                              )::Union{XMLDocument,JSON.Object{String,Any}}
     downloader = osm_network_downloader(download_method)
     data = downloader(network_type=network_type, metadata=metadata, download_format=download_format; download_kwargs...)
     @info "Downloaded osm network data from $(["$k: $v" for (k, v) in download_kwargs]) in $download_format format"

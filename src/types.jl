@@ -65,8 +65,14 @@ struct Way{T <: Union{Integer, String}}
     nodes::Vector{T}
     tags::Dict{String,Any}
 end
-Way(id::T, nodes, tags::Dict{String, Any}) where T <: Union{Integer, String} = Way(id, convert(Vector{T}, nodes), tags)
 
+function Way(
+    id::T,
+    nodes,
+    tags::JSON.Object{String, Any},
+) where T <: Union{Integer, String}
+    return Way(id, convert(Vector{T}, nodes), Dict(tags))
+end
 
 """
     EdgePoint{T<:Integer}

@@ -35,7 +35,7 @@ Creates an `OSMGraph` object from download OpenStreetMap network data, use with
 - `OSMGraph`: Container for storing OpenStreetMap node-, way-, relation- and graph-related 
     obejcts.
 """
-function graph_from_object(osm_data_object::Union{XMLDocument,Dict};
+function graph_from_object(osm_data_object::Union{XMLDocument,AbstractDict{String,Any}};
                            network_type::Symbol=:drive,
                            weight_type::Symbol=:time,
                            graph_type::Symbol=:static,
