@@ -41,7 +41,7 @@ function osm_subgraph(g::OSMGraph{U, T, W},
     add_graph!(osg, get_graph_type(g))
     add_node_tags!(osg)
 
-    if !isnothing(g.dijkstra_states) && isassigned(g.dijkstra_states, 1)
+    if isassigned(g.dijkstra_states, 1)
         add_dijkstra_states!(osg)
     else
         osg.dijkstra_states = Vector{Vector{U}}(undef, length(osg.nodes))
